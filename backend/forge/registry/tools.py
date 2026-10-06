@@ -13,6 +13,7 @@ PERMISSIONS: dict[str, str] = {
     "artifact.read": "Read artifacts of the current project",
     "artifact.write": "Create artifacts for the current run",
     "tests.run": "Execute tests inside the sandbox",
+    "vulndb.lookup": "Query the public OSV vulnerability database for dependency advisories",
     "memory.read": "Read project memory",
     "memory.write": "Write project memory",
 }
@@ -50,6 +51,28 @@ TOOLS: dict[str, ToolDefinition] = {
             "CodeSearch", "Code Search", "Regex search across repository files.", ("repository.read",),
             input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "glob": {"type": "string"},
                           "max_results": {"type": "integer"}}, "required": ["pattern"], "additionalProperties": False},
+        ),
+        ToolDefinition(
+            "PatternScan", "Pattern Scan",
+            "Deterministic rule-based scan for hardcoded secrets, insecure APIs, injection sinks and dangerous config.",
+            ("repository.read",),
+            input_schema={"type": "object", "properties": {"glob": {"type": "string"}, "categories": {
+                "type": "array", "items": {"type": "string"}}, "max_results": {"type": "integer"}},
+                "additionalProperties": False},
+        ),
+        ToolDefinition(
+            "DependencyManifest", "Dependency Manifest",
+            "Parse package manifests (npm, pip, go, cargo, maven, gem, composer) into a dependency list.",
+            ("repository.read",),
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        ),
+        ToolDefinition(
+            "OsvLookup", "OSV Lookup", "Batch-check (ecosystem, name, version) triples against osv.dev.",
+            ("vulndb.lookup",), side_effects="external_network",
+            input_schema={"type": "object", "properties": {"packages": {"type": "array", "items": {
+                "type": "object", "properties": {"ecosystem": {"type": "string"}, "name": {"type": "string"},
+                "version": {"type": "string"}}, "required": ["ecosystem", "name", "version"]}}},
+                "required": ["packages"], "additionalProperties": False},
         ),
         ToolDefinition(
             "RepositoryWrite", "Repository Write", "Apply a patch inside the isolated run workspace.",

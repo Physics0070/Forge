@@ -27,6 +27,18 @@ def _base_url() -> str:
 _u = make_url(_base_url()).set(database="forge_test")
 TEST_DB_URL = _u.render_as_string(hide_password=False)
 
+import tempfile
+
+_TMP = Path(tempfile.mkdtemp(prefix="forge-test-"))
+(_TMP / "pricing.json").write_text('{"models": {}}')
+os.environ["FORGE_WORKSPACES_ROOT"] = str(_TMP / "workspaces")
+os.environ["FORGE_PRICING_FILE"] = str(_TMP / "pricing.json")
+os.environ["FORGE_SANDBOX_ENABLED"] = "false"
+os.environ["STORAGE_ENDPOINT"] = ""
+os.environ["NEBIUS_MODEL_NANO"] = "test-nano"
+os.environ["NEBIUS_MODEL_SUPER"] = "test-super"
+os.environ["NEBIUS_MODEL_ULTRA"] = "test-ultra"
+os.environ["NEBIUS_MODEL_DEFAULT"] = "test-super"
 os.environ["FORGE_ENV"] = "test"
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ.setdefault("NEBIUS_API_KEY", "")
@@ -66,6 +78,18 @@ def _clean_tables(_migrated_db):
         ).scalars().all()
         conn.execute(text("TRUNCATE " + ", ".join(f'"{t}"' for t in tables) + " RESTART IDENTITY CASCADE"))
     yield
+
+
+@pytest.fixture(autouse=True)
+def _reset_runtime():
+    from forge.engine.runtime import set_provider
+    from forge.providers.pricing import load_pricing
+
+    set_provider(None)
+    load_pricing.cache_clear()
+    yield
+    set_provider(None)
+    load_pricing.cache_clear()
 
 
 @pytest.fixture

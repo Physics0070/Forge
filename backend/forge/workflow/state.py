@@ -38,15 +38,17 @@ NODE_TRANSITIONS: dict[NodeState, frozenset[NodeState]] = {
     N.PENDING: frozenset({N.READY, N.SKIPPED, N.CANCELLED, N.BLOCKED, N.FAILED}),
     N.READY: frozenset({N.RUNNING, N.CANCELLED, N.BLOCKED, N.SKIPPED}),
     # RUNNING -> READY: lease expired / worker died, job is requeued (recovery)
+    # RUNNING -> PENDING: RETRY-node loop-back (waits for the re-run target to settle again)
     N.RUNNING: frozenset({N.SUCCESS, N.FAILED, N.RETRYING, N.WAITING_APPROVAL, N.VERIFICATION_FAILED,
-                          N.BLOCKED, N.CANCELLED, N.READY}),
+                          N.BLOCKED, N.CANCELLED, N.READY, N.PENDING}),
     N.RETRYING: frozenset({N.READY, N.FAILED, N.CANCELLED}),
-    N.WAITING_APPROVAL: frozenset({N.SUCCESS, N.READY, N.FAILED, N.CANCELLED}),
+    N.WAITING_APPROVAL: frozenset({N.SUCCESS, N.READY, N.FAILED, N.CANCELLED, N.SKIPPED}),
     N.VERIFICATION_FAILED: frozenset({N.RECOVERING, N.RETRYING, N.FAILED, N.CANCELLED}),
     N.RECOVERING: frozenset({N.SUCCESS, N.READY, N.FAILED, N.CANCELLED}),
     N.BLOCKED: frozenset({N.READY, N.FAILED, N.CANCELLED}),
     # FAILED -> READY only through an explicit user "retry" (or RETRY-node loop-back)
-    N.FAILED: frozenset({N.READY}),
+    # FAILED -> RECOVERING: a RECOVERY node is repairing this node's output
+    N.FAILED: frozenset({N.READY, N.RECOVERING}),
     N.SUCCESS: frozenset({N.READY}),  # only a RETRY-node loop-back may re-run a succeeded node
     N.CANCELLED: frozenset(),
     N.SKIPPED: frozenset(),
@@ -56,8 +58,8 @@ RUN_TRANSITIONS: dict[RunState, frozenset[RunState]] = {
     R.PENDING: frozenset({R.RUNNING, R.CANCELLED, R.FAILED}),
     R.RUNNING: frozenset({R.PAUSED, R.WAITING_APPROVAL, R.BLOCKED, R.SUCCESS, R.FAILED, R.CANCELLED}),
     R.PAUSED: frozenset({R.RUNNING, R.CANCELLED}),
-    R.WAITING_APPROVAL: frozenset({R.RUNNING, R.CANCELLED, R.FAILED}),
-    R.BLOCKED: frozenset({R.RUNNING, R.CANCELLED, R.FAILED}),
+    R.WAITING_APPROVAL: frozenset({R.RUNNING, R.BLOCKED, R.SUCCESS, R.CANCELLED, R.FAILED}),
+    R.BLOCKED: frozenset({R.RUNNING, R.WAITING_APPROVAL, R.SUCCESS, R.CANCELLED, R.FAILED}),
     R.FAILED: frozenset({R.RUNNING}),  # user retry resumes from checkpoints
     R.SUCCESS: frozenset(),
     R.CANCELLED: frozenset(),

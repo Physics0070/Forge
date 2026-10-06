@@ -146,6 +146,7 @@ class Workflow(Base):
     project_id: Mapped[uuid.UUID] = _fk("projects")
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    template_key: Mapped[str | None] = mapped_column(String(80))
     created_by: Mapped[uuid.UUID] = _fk("users", ondelete="RESTRICT")
     created_at: Mapped[datetime] = _ts()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -186,7 +187,11 @@ class Run(Base):
     replay_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     idempotency_key: Mapped[str | None] = mapped_column(String(120))
     budget_usd: Mapped[float | None] = mapped_column(Numeric(12, 6))
+    budget_tokens: Mapped[int | None] = mapped_column(BigInteger)
     spent_usd: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, server_default="0")
+    spent_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    reserved_usd: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, server_default="0")
+    reserved_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     pause_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     error: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
@@ -211,6 +216,11 @@ class RunNode(Base):
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     model: Mapped[str | None] = mapped_column(String(200))
     routing: Mapped[dict[str, Any] | None] = mapped_column(JSONB)  # tier, reason, fallback
+    iteration: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")  # RETRY-node loop count
+    feedback: Mapped[dict[str, Any] | None] = mapped_column(JSONB)  # why the node is being re-run
+    model_override: Mapped[str | None] = mapped_column(String(200))
+    blocked_reason: Mapped[str | None] = mapped_column(String(40))  # budget | upstream_failed | approval_rejected
+    reused_from_run: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     input: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     output: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

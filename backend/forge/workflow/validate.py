@@ -277,8 +277,10 @@ def _check_node(wf, n: WorkflowNode, nodes, agent_lookup, known_models, add) -> 
         tgt = cfg.get("target")
         if tgt not in nodes:
             add("error", "RETRY_TARGET", f"RETRY '{n.id}' targets unknown node '{tgt}'.", node_id=n.id)
-        elif tgt not in anc:
-            add("error", "IMPOSSIBLE_DEPENDENCY", f"RETRY '{n.id}' target '{tgt}' must be upstream of it.", node_id=n.id)
+        elif tgt not in {e.source for e in wf.incoming(n.id)}:
+            add("error", "IMPOSSIBLE_DEPENDENCY", f"RETRY '{n.id}' target '{tgt}' must be a direct upstream node.", node_id=n.id)
+        elif len(wf.outgoing(tgt)) > 1:
+            add("warning", "RETRY_TARGET_SHARED", f"RETRY '{n.id}' target '{tgt}' also feeds other nodes, which will not see re-run output.", node_id=n.id)
         if not isinstance(cfg.get("until"), dict):
             add("error", "RETRY_PREDICATE", f"RETRY '{n.id}' needs config.until {{path, op, value}}.", node_id=n.id)
     elif n.type == NodeType.RECOVERY:
