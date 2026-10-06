@@ -9,6 +9,8 @@ to watch a full run without a Nebius key, or with the real worker once NEBIUS_AP
 from __future__ import annotations
 
 import argparse
+import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -17,8 +19,9 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tests.audit_script import zip_bytes  # noqa: E402
 
-DEMO_EMAIL = "demo@forge-demo.dev"       # local test credentials only
-DEMO_PASSWORD = "<set FORGE_DEMO_PASSWORD>"  # local test credentials only
+DEMO_EMAIL = os.environ.get("FORGE_DEMO_EMAIL", "demo@forge-demo.dev")
+# The password is never hardcoded: set FORGE_DEMO_PASSWORD, or a random one is generated and printed once.
+DEMO_PASSWORD = os.environ.get("FORGE_DEMO_PASSWORD") or secrets.token_urlsafe(16)
 
 
 def main() -> None:
@@ -45,6 +48,8 @@ def main() -> None:
     wf = c.get(f"/api/workflows/{wf['id']}").json()
     run = c.post("/api/runs", json={"workflow_version_id": wf["versions"][-1]["id"], "repository_id": repo["id"],
                                     "input": {"objective": "Audit the vulnerable-service repository"}, "budget_tokens": 200000}, headers=h).json()
+    if not os.environ.get("FORGE_DEMO_PASSWORD"):
+        print(f"password={DEMO_PASSWORD}  (generated; set FORGE_DEMO_PASSWORD to reuse an account)")
     print(f"user={DEMO_EMAIL}\nproject={proj['id']}\nworkflow={wf['id']}\nrun={run.get('id')}  status={run.get('status')}")
 
 

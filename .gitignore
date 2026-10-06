@@ -22,3 +22,14 @@ frontend/.next/
 frontend/next-env.d.ts
 *.tsbuildinfo
 backend/data/
+
+# never commit secrets or local configuration
+*.env
+.env.local
+.env.*.local
+**/.env
+*.pem
+*.key
+*.p12
+secrets/
+data_worker.log

@@ -12,7 +12,7 @@ Track: **Best Apps and Agents** (agent workflow runtime for a real job: auditing
 | 2 | Model prices from the Token Factory console → `backend/forge/providers/pricing.json` (otherwise cost shows "Not available") | **TODO** |
 | 3 | Tavily API key (optional; Builders Program credits) → `TAVILY_API_KEY` | **TODO** |
 | 4 | Nebius AI Cloud: VM + Managed PostgreSQL + Object Storage bucket/keys + DNS name (docs/DEPLOYMENT.md) | **TODO** |
-| 5 | Public GitHub repo URL (MIT license is in place; make sure "MIT" shows in the About box) | **TODO** |
+| 5 | Public GitHub repo: https://github.com/Physics0070/Forge (Apache-2.0 license shows in the About box) | done |
 | 6 | Hosted demo URL + a judge test account (put credentials in the Devpost "testing instructions", not in the repo) | **TODO** |
 | 7 | YouTube video (public, < 3:00, no copyrighted music) | **TODO** |
 | 8 | Representative who submits on Devpost; Builders & Brews city (if attended) | **TODO** |

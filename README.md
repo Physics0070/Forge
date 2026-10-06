@@ -6,7 +6,7 @@ FORGE turns natural-language goals into typed, observable and permission-control
 
 The first production workflow is **Repository Security Analysis & Remediation**: connect a repository, describe the objective, inspect and approve the generated workflow, watch agents scan in parallel, see which findings are verified, approve proposed patches (applied only in an isolated copy, tested in a sandbox), and get a report built from verified results only.
 
-> Hackathon: Nebius × NVIDIA Global AI Hackathon 2026 · Track: **Best Apps and Agents** · Team: Soham Joshi, Chitrangad Sapate, Ruturaj Nalbalwar · License: MIT
+> Hackathon: Nebius × NVIDIA Global AI Hackathon 2026 · Track: **Best Apps and Agents** · Team: Soham Joshi, Chitrangad Sapate, Ruturaj Nalbalwar · License: Apache-2.0
 
 ---
 
@@ -122,4 +122,4 @@ See [docs/OPERATIONS.md#limitations](docs/OPERATIONS.md#limitations). Highlights
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE).
