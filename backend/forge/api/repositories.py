@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from forge import repos
 from forge.api.projects import get_project_or_404
 from forge.audit import audit
+from forge.config import get_settings
 from forge.db import get_db, session_scope
 from forge.deps import Principal, get_principal, not_found
 from forge.models import Repository
@@ -44,6 +45,8 @@ def repo_out(r: Repository) -> dict:
 
 
 def _finish(repo_id: uuid.UUID, snap: repos.Snapshot | None, error: str | None) -> None:
+    if snap is not None and len(snap.archive) > get_settings().max_repo_mb * 1024 * 1024:
+        snap, error = None, f"Repository snapshot exceeds the {get_settings().max_repo_mb} MB limit of this deployment."
     with session_scope() as db:
         r = db.get(Repository, repo_id)
         if r is None:
@@ -89,7 +92,11 @@ def import_github(project_id: uuid.UUID, body: GithubImport, p: Principal = Depe
     db.flush()
     audit(db, "repository.import", workspace_id=p.workspace_id, user_id=p.user_id, target_type="repository", target_id=r.id,
           kind="github", url=body.url, private=bool(body.token))
-    db.commit()  # the background thread must see the row
+    db.commit()  # the import (thread or inline) must see the row
+    if get_settings().sync_imports:  # serverless: background threads don't survive the response
+        _github_job(r.id, body.url, body.ref, body.token)
+        db.refresh(r)
+        return repo_out(r)
     threading.Thread(target=_github_job, args=(r.id, body.url, body.ref, body.token), daemon=True, name="forge-import").start()
     return repo_out(r)
 
@@ -98,7 +105,10 @@ def import_github(project_id: uuid.UUID, body: GithubImport, p: Principal = Depe
 def upload_zip(project_id: uuid.UUID, file: UploadFile = File(...), p: Principal = Depends(get_principal),
                db: Session = Depends(get_db)):
     get_project_or_404(db, p, project_id)
-    data = file.file.read(MAX_ZIP_UPLOAD + 1)
+    limit = min(MAX_ZIP_UPLOAD, get_settings().max_upload_mb * 1024 * 1024)
+    data = file.file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(413, {"code": "UPLOAD_TOO_LARGE", "message": f"ZIP exceeds the {limit // (1024 * 1024)} MB upload limit of this deployment. Import from GitHub instead."})
     r = Repository(workspace_id=p.workspace_id, project_id=project_id, kind="zip", url=(file.filename or "upload.zip")[:200],
                    status="importing")
     db.add(r)

@@ -29,6 +29,10 @@ class NodePaused(NodeSignal):
     pass
 
 
+class NodeSuspended(NodePaused):
+    """The worker's time slice is ending (serverless): checkpoint and hand the node back to the queue."""
+
+
 class NodeCancelled(NodeSignal):
     pass
 
@@ -131,6 +135,10 @@ class NodeCtx:
     repo_dir: Path | None
     write_approved: bool
     started_monotonic: float = field(default_factory=time.monotonic)
+    yield_at: float | None = None  # monotonic time after which the node must suspend (serverless slices)
+
+    def should_yield(self) -> bool:
+        return self.yield_at is not None and time.monotonic() >= self.yield_at
 
     @property
     def deadline(self) -> float:

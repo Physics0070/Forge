@@ -1,19 +1,16 @@
 """Repository import: GitHub (https://github.com/owner/repo) or ZIP upload -> sanitised tar.gz snapshot."""
 from __future__ import annotations
 
-import base64
 import io
 import re
 import shutil
-import subprocess
 import tempfile
 import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from forge.sandbox import (MAX_ARCHIVE_BYTES, MAX_ARCHIVE_FILES, MAX_ZIP_UPLOAD, SandboxError, finalize_tree,
-                           minimal_env)
+from forge.sandbox import MAX_ARCHIVE_BYTES, MAX_ARCHIVE_FILES, MAX_ZIP_UPLOAD, SandboxError, finalize_tree
 
 _GH = re.compile(r"^https://github\.com/([A-Za-z0-9_.\-]{1,100})/([A-Za-z0-9_.\-]{1,100}?)(?:\.git)?/?$")
 # A single top-level folder with one of these names is repo CONTENT, not a GitHub-style wrapper folder.
@@ -44,48 +41,82 @@ def parse_github_url(url: str) -> tuple[str, str]:
     return owner, repo
 
 
-def import_github(url: str, ref: str | None = None, token: str | None = None, timeout_s: int = 180) -> Snapshot:
-    """Shallow-clone into a temp dir. `token` (optional PAT for private repos) is used transiently via
-    git's env-config (never argv, never stored, never visible to agents)."""
+MAX_DOWNLOAD = 150 * 1024 * 1024
+_ALLOWED_REDIRECT_HOSTS = {"codeload.github.com"}
+
+
+def import_github(url: str, ref: str | None = None, token: str | None = None, timeout_s: int = 180,
+                  client: "httpx.Client | None" = None) -> Snapshot:
+    """Download the repository tarball over HTTPS (no git binary needed: works on serverless hosts).
+
+    Only api.github.com is contacted, and redirects are followed only to codeload.github.com (SSRF guard).
+    `token` (optional, for private repos) is sent once to GitHub, never stored or logged, never visible to agents.
+    """
+    import tarfile
+    from urllib.parse import urlparse
+
+    import httpx
+
     owner, repo = parse_github_url(url)
     if ref is not None and not _REF.match(ref):
         raise RepoImportError("Invalid branch/tag name.")
-    clean_url = f"https://github.com/{owner}/{repo}.git"
-    tmp = Path(tempfile.mkdtemp(prefix="forge-clone-"))
+    api = f"https://api.github.com/repos/{owner}/{repo}/tarball" + (f"/{ref}" if ref else "")
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "forge-runtime", "X-GitHub-Api-Version": "2022-11-28"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    c = client or httpx.Client(timeout=httpx.Timeout(timeout_s, connect=15.0), follow_redirects=False)
+    tmp = Path(tempfile.mkdtemp(prefix="forge-gh-"))
     try:
-        env = minimal_env()
-        if token:
-            basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
-            env.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="http.extraheader",
-                       GIT_CONFIG_VALUE_0=f"Authorization: Basic {basic}")
-        cmd = ["git", "-c", "core.symlinks=false", "-c", "core.hooksPath=NUL", "-c", "protocol.allow=never",
-               "-c", "protocol.https.allow=always", "clone", "--depth", "1", "--no-tags", "--single-branch",
-               "--no-recurse-submodules"]
-        if ref:
-            cmd += ["--branch", ref]
-        dest = tmp / "repo"
-        cmd += ["--", clean_url, str(dest)]
         try:
-            proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout_s)
-        except subprocess.TimeoutExpired as exc:
-            raise RepoImportError("Cloning timed out.") from exc
-        except FileNotFoundError as exc:
-            raise RepoImportError("git is not installed on the server.") from exc
-        if proc.returncode != 0:
-            err = proc.stderr.replace(token or "\x00", "***")[-300:]
-            raise RepoImportError(f"Could not clone the repository (is it public / is the token valid?): {err.strip()}")
+            r = c.get(api, headers=headers)
+            hops = 0
+            while r.status_code in (301, 302, 303, 307, 308) and hops < 3:
+                loc = r.headers.get("location", "")
+                u = urlparse(loc)
+                if u.scheme != "https" or u.hostname not in _ALLOWED_REDIRECT_HOSTS | {"api.github.com"}:
+                    raise RepoImportError("Unexpected redirect while downloading the repository.")
+                r = c.get(loc, headers={"User-Agent": "forge-runtime"} if u.hostname != "api.github.com" else headers)
+                hops += 1
+        except httpx.HTTPError as exc:
+            raise RepoImportError(f"Could not reach GitHub: {type(exc).__name__}") from exc
+        if r.status_code in (401, 403, 404):
+            msg = "Repository not found or not accessible (is it public / is the token valid?)."
+            if r.status_code == 403 and "rate limit" in r.text.lower():
+                msg = "GitHub API rate limit reached. Retry later or provide a token."
+            raise RepoImportError(msg)
+        if r.status_code >= 400:
+            raise RepoImportError(f"GitHub returned HTTP {r.status_code}.")
+        data = r.content
+        if len(data) > MAX_DOWNLOAD:
+            raise RepoImportError("Repository archive is too large.")
+        src = tmp / "src"
+        src.mkdir()
+        try:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+                members = tar.getmembers()
+                if len(members) > MAX_ARCHIVE_FILES * 2:
+                    raise RepoImportError("Repository has too many files.")
+                if sum(max(m.size, 0) for m in members) > MAX_ARCHIVE_BYTES:
+                    raise RepoImportError("Repository is larger than the 300 MB limit.")
+                tar.extractall(src, filter="data")  # rejects absolute paths, links outside, devices
+        except tarfile.TarError as exc:
+            raise RepoImportError("GitHub returned an unreadable archive.") from exc
+        entries = list(src.iterdir())
+        tree = entries[0] if len(entries) == 1 and entries[0].is_dir() else src
         sha = None
+        m = re.match(rf"^{re.escape(owner)}-{re.escape(repo)}-([0-9a-f]{{7,40}})$", tree.name, re.I)
+        if m:
+            sha = m.group(1)
         try:
-            sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=dest, env=minimal_env(), capture_output=True,
-                                 text=True, timeout=20).stdout.strip() or None
-        except Exception:
-            pass
-        try:
-            archive, n, size = finalize_tree(dest)
+            archive, n, size = finalize_tree(tree)
         except SandboxError as exc:
             raise RepoImportError(str(exc)) from exc
+        if n == 0:
+            raise RepoImportError("Repository is empty.")
         return Snapshot(archive, n, size, sha)
     finally:
+        if client is None:
+            c.close()
         shutil.rmtree(tmp, ignore_errors=True)
 
 

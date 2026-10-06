@@ -101,11 +101,60 @@ class S3Store(ObjectStore):
             return False
 
 
+class PgStore(ObjectStore):
+    """Objects stored in Postgres (`blobs` table). For serverless deployments without an S3 bucket;
+    every API/worker instance shares it, unlike the local driver."""
+
+    driver = "postgres"
+
+    def put(self, key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+        from sqlalchemy import text
+
+        from forge.db import session_scope
+
+        with session_scope() as db:
+            db.execute(text("""INSERT INTO blobs (key, data, content_type, size_bytes) VALUES (:k, :d, :t, :n)
+                               ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, content_type = EXCLUDED.content_type,
+                               size_bytes = EXCLUDED.size_bytes"""), {"k": _safe_key(key), "d": data, "t": content_type, "n": len(data)})
+
+    def get(self, key: str) -> bytes:
+        from sqlalchemy import text
+
+        from forge.db import session_scope
+
+        with session_scope() as db:
+            row = db.execute(text("SELECT data FROM blobs WHERE key = :k"), {"k": _safe_key(key)}).first()
+        if row is None:
+            raise FileNotFoundError(key)
+        return bytes(row[0])
+
+    def delete(self, key: str) -> None:
+        from sqlalchemy import text
+
+        from forge.db import session_scope
+
+        with session_scope() as db:
+            db.execute(text("DELETE FROM blobs WHERE key = :k"), {"k": _safe_key(key)})
+
+    def exists(self, key: str) -> bool:
+        from sqlalchemy import text
+
+        from forge.db import session_scope
+
+        with session_scope() as db:
+            return db.execute(text("SELECT 1 FROM blobs WHERE key = :k"), {"k": _safe_key(key)}).first() is not None
+
+
 @lru_cache
 def get_store() -> ObjectStore:
     s = get_settings()
-    if s.storage_endpoint:
+    driver = s.storage_driver
+    if driver == "auto":
+        driver = "s3" if s.storage_endpoint else "local"
+    if driver == "s3":
         return S3Store(s.storage_endpoint, s.storage_bucket, s.storage_region, s.storage_access_key, s.storage_secret_key)
+    if driver == "postgres":
+        return PgStore()
     return LocalStore(Path(s.workspaces_root).parent / "objects")
 
 

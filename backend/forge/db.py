@@ -6,6 +6,7 @@ from typing import Iterator
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from forge.config import get_settings
@@ -15,10 +16,17 @@ class Base(DeclarativeBase):
     pass
 
 
+def engine_kwargs() -> dict:
+    """Serverless / transaction-pooler friendly settings (no server-side prepared statements, no client pool)."""
+    s = get_settings()
+    if s.db_pooler == "transaction" or s.serverless:
+        return {"poolclass": NullPool, "connect_args": {"prepare_threshold": None}}
+    return {"pool_pre_ping": True, "pool_size": 10, "max_overflow": 20}
+
+
 @lru_cache
 def get_engine() -> Engine:
-    s = get_settings()
-    return create_engine(s.database_url, pool_pre_ping=True, pool_size=10, max_overflow=20, future=True)
+    return create_engine(get_settings().database_url, future=True, **engine_kwargs())
 
 
 @lru_cache

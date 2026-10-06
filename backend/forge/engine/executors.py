@@ -155,7 +155,7 @@ def make_judge(ctx: NodeCtx):
     state = {"independent": independent, "blocked": False}
 
     def judge(claim: dict[str, Any], code_ctx: str) -> dict[str, Any] | None:
-        if state["blocked"]:
+        if state["blocked"] or ctx.should_yield():
             return None
         msgs = [
             Message("system", agent.system_contract + "\n\nReply with ONE JSON object: "

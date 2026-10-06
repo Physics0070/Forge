@@ -153,14 +153,8 @@ def extract_archive(data: bytes, dest: Path) -> None:
         tar.extractall(dest, filter="data")
 
 
-def git_baseline(repo_dir: Path) -> None:
-    """Commit the pristine snapshot so later `git diff` shows exactly what agents changed."""
-    env = minimal_env()
-    cmds = [
-        ["git", "init", "-q"],
-        ["git", "add", "-A"],
-        ["git", "-c", "user.name=forge", "-c", "user.email=forge@localhost", "-c", "commit.gpgsign=false",
-         "commit", "-q", "--allow-empty", "-m", "baseline"],
-    ]
-    for c in cmds:
-        subprocess.run(c, cwd=repo_dir, env=env, check=True, capture_output=True, timeout=120)
+def init_baseline(repo_dir: Path) -> None:
+    """Start change tracking for a freshly materialised run workspace (pure Python, no git needed)."""
+    from forge.patching import init_baseline as _init
+
+    _init(repo_dir)

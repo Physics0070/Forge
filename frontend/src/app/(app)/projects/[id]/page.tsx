@@ -96,7 +96,7 @@ export default function ProjectPage() {
           actions={<><Button size="xs" onClick={() => setGhOpen(true)}><Github className="h-3 w-3" /> GitHub</Button><Button size="xs" loading={uploading} onClick={() => fileRef.current?.click()}><Upload className="h-3 w-3" /> ZIP</Button>
             <input ref={fileRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} /></>}>
           {!list ? <Skeleton className="m-3 h-16" /> : list.length === 0 ? (
-            <Empty icon={<GitBranch className="h-5 w-5" />} title="No repository connected">Connect a public GitHub repository or upload a ZIP (max 100 MB).</Empty>
+            <Empty icon={<GitBranch className="h-5 w-5" />} title="No repository connected">Connect a public GitHub repository or upload a ZIP.</Empty>
           ) : (
             <ul className="divide-y divide-line">
               {list.map((r) => (

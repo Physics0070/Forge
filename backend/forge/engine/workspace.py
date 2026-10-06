@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 import threading
 import uuid
 from pathlib import Path
@@ -12,7 +11,7 @@ from sqlalchemy import select
 from forge.artifacts import load_content
 from forge.db import session_scope
 from forge.models import Artifact
-from forge.sandbox import extract_archive, git_baseline, minimal_env, run_repo_dir
+from forge.sandbox import extract_archive, init_baseline, run_repo_dir
 from forge.storage import ObjectStore
 
 _locks: dict[uuid.UUID, threading.Lock] = {}
@@ -38,14 +37,11 @@ def mark_applied(repo: Path, artifact_id: uuid.UUID) -> None:
         fh.write(f"{artifact_id}\n")
 
 
-def _git_apply(repo: Path, patch: str) -> None:
-    pf = repo.parent / ".replay.patch"
-    pf.write_text(patch if patch.endswith("\n") else patch + "\n", encoding="utf-8", newline="\n")
-    try:
-        subprocess.run(["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", "-p1", str(pf)], cwd=repo,
-                       env=minimal_env(), check=True, capture_output=True, timeout=60)
-    finally:
-        pf.unlink(missing_ok=True)
+def _replay_patch(repo: Path, patch: str) -> None:
+    from forge.patching import apply_patch
+    from forge.sandbox import safe_resolve
+
+    apply_patch(repo, patch, lambda rel: safe_resolve(repo, rel))
 
 
 def ensure_run_repo(workspace_id: uuid.UUID, project_id: uuid.UUID, run_id: uuid.UUID, storage_key: str,
@@ -59,7 +55,7 @@ def ensure_run_repo(workspace_id: uuid.UUID, project_id: uuid.UUID, run_id: uuid
                 shutil.rmtree(repo.parent, ignore_errors=True)
             repo.parent.mkdir(parents=True, exist_ok=True)
             extract_archive(store.get(storage_key), repo)
-            git_baseline(repo)
+            init_baseline(repo)
             marker.write_text("1")
         with session_scope() as db:
             patches = db.execute(select(Artifact).where(Artifact.run_id == run_id, Artifact.type == "applied_patch")
@@ -67,7 +63,7 @@ def ensure_run_repo(workspace_id: uuid.UUID, project_id: uuid.UUID, run_id: uuid
             have = _applied_ids(repo)
             for a in patches:
                 if str(a.id) not in have:
-                    _git_apply(repo, str(load_content(store, a)))
+                    _replay_patch(repo, str(load_content(store, a)))
                     mark_applied(repo, a.id)
     return repo
 

@@ -1,4 +1,5 @@
 "use client";
+import * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "./api";
 import type { ForgeEvent, Run } from "./types";
@@ -56,6 +57,12 @@ export function useQuery<T>(path: string | null, opts: { every?: number } = {}):
 }
 
 const TERMINAL = new Set(["SUCCESS", "FAILED", "CANCELLED"]);
+
+let serverlessFlag: Promise<boolean> | null = null;
+function isServerless(): Promise<boolean> {
+  serverlessFlag ??= fetch("/api/health", { cache: "no-store" }).then((r) => r.json()).then((j) => !!j.serverless).catch(() => false);
+  return serverlessFlag;
+}
 
 /**
  * Live run state. Events arrive over Server-Sent Events (the server tails the append-only event log);
@@ -115,6 +122,35 @@ export function useLiveRun(runId: string) {
   }, [runId, scheduleReload]);
 
   const active = q.data ? !TERMINAL.has(q.data.status) : true;
+  const status = q.data?.status;
+
+  // Serverless deployments have no always-on worker: while the page is open and the run is RUNNING,
+  // drive execution in short server-side slices (a scheduled tick does the same in the background).
+  React.useEffect(() => {
+    if (status !== "RUNNING") return;
+    let stop = false;
+    (async () => {
+      if (!(await isServerless())) return;
+      while (!stop) {
+        try {
+          const r = await api.post<{ status: string }>(`/api/runs/${runId}/pump`);
+          reloadRef.current();
+          if (r.status !== "RUNNING") break;
+        } catch {
+          await new Promise((res) => setTimeout(res, 5000));
+        }
+      }
+    })();
+    return () => { stop = true; };
+  }, [runId, status]);
+
+  // If the event stream is unavailable (proxies, timeouts), fall back to a gentle poll while active.
+  React.useEffect(() => {
+    if (connected || !active) return;
+    const t = setInterval(() => reloadRef.current(), 4000);
+    return () => clearInterval(t);
+  }, [connected, active]);
+
   return { run: q.data, error: q.error, loading: q.loading, events, connected, active, reload: q.reload };
 }
 

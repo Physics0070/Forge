@@ -149,7 +149,7 @@ def test_osv_lookup_parses_response(ctx):
 
 
 def test_repository_write_applies_in_isolated_copy_only(ctx, repo, tmp_path):
-    sandbox.git_baseline(repo)
+    sandbox.init_baseline(repo)
     patch = ("--- a/src/app.py\n+++ b/src/app.py\n@@ -1,2 +1,2 @@\n-import pickle, os\n+import json, os\n"
              f" AWS = '{SECRET}'\n")
     out = execute_tool(ctx, "RepositoryWrite", {"patch": patch})
@@ -161,14 +161,14 @@ def test_repository_write_applies_in_isolated_copy_only(ctx, repo, tmp_path):
 
 @pytest.mark.parametrize("path", ["../outside.txt", "/etc/passwd", ".git/config"])
 def test_repository_write_rejects_escaping_paths(ctx, repo, path):
-    sandbox.git_baseline(repo)
+    sandbox.init_baseline(repo)
     patch = f"--- a/{path}\n+++ b/{path}\n@@ -0,0 +1 @@\n+pwned\n"
     with pytest.raises(ToolError):
         execute_tool(ctx, "RepositoryWrite", {"patch": patch})
 
 
 def test_repository_write_bad_patch(ctx, repo):
-    sandbox.git_baseline(repo)
+    sandbox.init_baseline(repo)
     with pytest.raises(ToolError):
         execute_tool(ctx, "RepositoryWrite", {"patch": "not a diff"})
     bad = "--- a/src/app.py\n+++ b/src/app.py\n@@ -1 +1 @@\n-nonexistent line\n+x\n"

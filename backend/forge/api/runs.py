@@ -271,6 +271,24 @@ def replay(run_id: uuid.UUID, body: ReplayBody, response: Response, p: Principal
     return {**summary.run_out(db, run), "idempotentReplay": replayed}
 
 
+@router.post("/runs/{run_id}/pump")
+def pump(run_id: uuid.UUID, p: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """Serverless only: lets an open run page drive execution in short slices (the cron tick does it otherwise)."""
+    from forge.config import get_settings
+    from forge.engine.tick import run_tick
+
+    if not get_settings().serverless:
+        raise HTTPException(404, {"code": "NOT_FOUND", "message": "Not available: dedicated workers execute runs."})
+    run = get_run_or_404(db, p, run_id)
+    ratelimit.check(db, "api", f"pump:{p.user_id}")
+    status = run.status
+    db.commit()
+    if status != "RUNNING":
+        return {"processed": 0, "status": status}
+    out = run_tick(budget_s=40, parallel=4, label="pump")
+    return {**out, "status": status}
+
+
 # ---------------------------------------------------------------------- data
 @router.get("/runs/{run_id}/events")
 def events(run_id: uuid.UUID, after: int = 0, limit: int = Query(500, le=2000), type: str | None = None,

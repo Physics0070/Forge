@@ -259,7 +259,8 @@ def get_settings_view(p: Principal = Depends(get_principal), db: Session = Depen
         "retention": {"run_logs_days": rp.run_logs_days, "artifacts_days": rp.artifacts_days, "memory_days": rp.memory_days,
                       "traces_days": rp.traces_days} if rp else None,
         "githubOAuthConfigured": bool(s.github_client_id and s.github_client_secret),
-        "limits": {"maxZipMB": 100, "maxRepoFiles": 20000},
+        "limits": {"maxZipMB": min(100, s.max_upload_mb), "maxRepoFiles": 20000, "maxRepoMB": s.max_repo_mb},
+        "executionMode": "serverless" if s.serverless else "workers",
     }
 
 

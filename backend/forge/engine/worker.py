@@ -30,7 +30,7 @@ from forge.db import session_scope
 from forge.engine import core, executors, workspace
 from forge.engine.core import emit, lock_run, run_nodes, transition, workflow_of
 from forge.engine.runtime import (LeaseLost, NodeBlocked, NodeCancelled, NodeCtx, NodeLoopback, NodePaused, NodeResult,
-                                  NodeWaiting, get_provider)
+                                  NodeSuspended, NodeWaiting, get_provider)
 from forge.logging import log, redact
 from forge.models import Approval, Job
 from forge.registry.agents import agent_from_json, builtin_lookup
@@ -79,6 +79,7 @@ class Worker:
         self.ws_limit = workspace_limit
         self._stop = threading.Event()
         self._hb: threading.Thread | None = None
+        self.yield_at: float | None = None  # set by time-sliced (serverless) ticks
 
     # ------------------------------------------------------------- leasing
     def lease(self) -> dict[str, Any] | None:
@@ -248,6 +249,8 @@ class Worker:
                                                          get_store())
             result = executors.execute(ctx)
             self._validate_output(ctx, result)
+        except NodeSuspended:
+            self._safe(self._finish_paused, ctx, "NODE_SUSPENDED")
         except NodePaused:
             self._safe(self._finish_paused, ctx)
         except NodeCancelled:
@@ -322,7 +325,7 @@ class Worker:
                 input=dict(rn.input or {}), attempt=rn.attempt, iteration=rn.iteration, feedback=rn.feedback,
                 model_override=rn.model_override, run_input=dict(run.input or {}),
                 replay_model=(run.replay_config or {}).get("model"), repo_dir=None,
-                write_approved=core.write_approved(db, run, wf, node.id))
+                write_approved=core.write_approved(db, run, wf, node.id), yield_at=self.yield_at)
             ctx._repo_key = repo_key  # type: ignore[attr-defined]
             return ctx
 
@@ -449,7 +452,7 @@ class Worker:
             core.enqueue(db, run, lb.target)
             core.refresh_run(db, run)
 
-    def _finish_paused(self, ctx: NodeCtx) -> None:
+    def _finish_paused(self, ctx: NodeCtx, event: str = "NODE_PAUSED") -> None:
         with session_scope() as db:
             run = lock_run(db, ctx.run_id)
             r = db.execute(text("UPDATE jobs SET status='queued', leased_by=NULL, lease_expires_at=NULL WHERE id=:id AND leased_by=:w AND status='leased'"),
@@ -458,7 +461,7 @@ class Worker:
                 raise LeaseLost()
             rn = run_nodes(db, run.id)[ctx.node.id]
             if rn.state == N.RUNNING.value:
-                transition(db, run, rn, N.READY, event="NODE_PAUSED")
+                transition(db, run, rn, N.READY, event=event)
 
     def _finish_cancelled(self, ctx: NodeCtx) -> None:
         with session_scope() as db:

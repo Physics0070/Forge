@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
 import regex
 
-from forge.sandbox import (MAX_FILE_BYTES, SandboxError, is_probably_text, iter_files, minimal_env, read_text_limited,
-                           rel_path, safe_resolve)
+from forge.sandbox import MAX_FILE_BYTES, SandboxError, is_probably_text, iter_files, read_text_limited, rel_path, safe_resolve
 from forge.tools.base import ToolContext, ToolError, clip
 
 MAX_READ_LINES = 400
@@ -108,7 +106,9 @@ def _patch_paths(patch: str) -> list[str]:
 
 
 def repository_write(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
-    """Apply a unified diff to the run's *isolated copy*. Every path in the diff is validated first."""
+    """Apply a unified diff to the run's *isolated copy*. Every path is sandbox-validated; application is atomic."""
+    from forge.patching import PatchError, apply_patch, diff_stat
+
     base = ctx.require_repo()
     patch = args["patch"]
     if len(patch.encode()) > MAX_PATCH_BYTES:
@@ -118,29 +118,16 @@ def repository_write(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
         raise ToolError("bad_patch", "No file paths found in the patch (expected a unified diff).")
     for p in paths:
         _sb(lambda p=p: safe_resolve(base, p))
-    if not patch.endswith("\n"):
-        patch += "\n"
-    env = minimal_env()
-    patch_file = base.parent / f".forge-{ctx.node_id}.patch"
-    patch_file.write_text(patch, encoding="utf-8", newline="\n")
     try:
-        chk = subprocess.run(["git", "apply", "--check", "--whitespace=nowarn", "--ignore-whitespace", "-p1", str(patch_file)], cwd=base,
-                             env=env, capture_output=True, text=True, timeout=60)
-        if chk.returncode != 0:
-            raise ToolError("patch_does_not_apply", f"Patch does not apply cleanly: {chk.stderr.strip()[:500]}")
-        ap = subprocess.run(["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", "-p1", str(patch_file)], cwd=base, env=env,
-                            capture_output=True, text=True, timeout=60)
-        if ap.returncode != 0:
-            raise ToolError("patch_failed", ap.stderr.strip()[:500])
-    finally:
-        patch_file.unlink(missing_ok=True)
-    ctx.applied_patches.append(patch)
-    stat = subprocess.run(["git", "diff", "--stat"], cwd=base, env=env, capture_output=True, text=True, timeout=60)
-    return {"applied_files": paths, "diff_stat": stat.stdout.strip()[-1500:]}
+        applied = apply_patch(base, patch, lambda rel: _sb(lambda: safe_resolve(base, rel)))
+    except PatchError as exc:
+        raise ToolError(exc.code, exc.message) from exc
+    ctx.applied_patches.append(patch if patch.endswith("\n") else patch + "\n")
+    return {"applied_files": applied, "diff_stat": diff_stat(base)[-1500:]}
 
 
 def current_diff(repo_dir: Path) -> str:
-    """Full unified diff of everything agents changed vs. the pristine snapshot."""
-    r = subprocess.run(["git", "diff", "--no-color"], cwd=repo_dir, env=minimal_env(), capture_output=True, text=True,
-                       timeout=120)
-    return r.stdout
+    """Full unified diff of everything agents changed vs. the pristine snapshot (computed by FORGE)."""
+    from forge.patching import workspace_diff
+
+    return workspace_diff(repo_dir)

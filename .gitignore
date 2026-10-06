@@ -33,3 +33,4 @@ backend/data/
 *.p12
 secrets/
 data_worker.log
+.deploy/

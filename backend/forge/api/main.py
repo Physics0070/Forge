@@ -70,7 +70,19 @@ def create_app() -> FastAPI:
             db_ok = True
         except Exception:
             db_ok = False
-        return JSONResponse({"status": "ok" if db_ok else "degraded", "database": db_ok}, status_code=200 if db_ok else 503)
+        return JSONResponse({"status": "ok" if db_ok else "degraded", "database": db_ok, "serverless": settings.serverless},
+                            status_code=200 if db_ok else 503)
+
+    @app.post("/api/internal/tick", include_in_schema=False)
+    def internal_tick(request: Request):
+        """Background execution slice, called by a scheduler (Supabase pg_cron) with a shared secret."""
+        from forge.engine.tick import run_tick
+        from forge.security import constant_time_equals
+
+        supplied = request.headers.get("x-forge-cron-secret", "")
+        if not settings.cron_secret or not supplied or not constant_time_equals(supplied, settings.cron_secret):
+            return JSONResponse({"error": {"code": "NOT_FOUND", "message": "Not found."}}, status_code=404)
+        return run_tick(budget_s=150, parallel=4, label="cron")
 
     app.include_router(auth.router)
     app.include_router(projects.router)

@@ -21,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -441,6 +442,17 @@ class RateLimitWindow(Base):
     key: Mapped[str] = mapped_column(String(200), primary_key=True)
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+
+class Blob(Base):
+    """Object storage inside Postgres (STORAGE_DRIVER=postgres) for deployments without an S3 bucket."""
+
+    __tablename__ = "blobs"
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False, server_default="application/octet-stream")
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = _ts()
 
 
 class AuditLog(Base):

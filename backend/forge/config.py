@@ -1,6 +1,7 @@
 """Environment configuration. Validated once at startup with actionable errors."""
 from __future__ import annotations
 
+import os
 import sys
 from functools import lru_cache
 from typing import Literal
@@ -43,6 +44,15 @@ class Settings(BaseSettings):
     job_lease_seconds: int = Field(60, alias="FORGE_JOB_LEASE_SECONDS")
     sandbox_image: str = Field("python:3.12-slim", alias="FORGE_SANDBOX_IMAGE")
     sandbox_enabled: bool = Field(True, alias="FORGE_SANDBOX_ENABLED")
+
+    # ---- serverless (Vercel) deployment ----
+    serverless: bool = Field(bool(os.environ.get("VERCEL")), alias="FORGE_SERVERLESS")
+    db_pooler: Literal["none", "transaction"] = Field("none", alias="FORGE_DB_POOLER")  # pgbouncer/supavisor tx mode
+    storage_driver: Literal["auto", "s3", "local", "postgres"] = Field("auto", alias="STORAGE_DRIVER")
+    max_upload_mb: int = Field(100, alias="FORGE_MAX_UPLOAD_MB")
+    max_repo_mb: int = Field(300, alias="FORGE_MAX_REPO_MB")
+    sync_imports: bool = Field(bool(os.environ.get("VERCEL")), alias="FORGE_SYNC_IMPORTS")
+    cron_secret: str = Field("", alias="FORGE_CRON_SECRET")
 
     @model_validator(mode="after")
     def _production_rules(self) -> "Settings":

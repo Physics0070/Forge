@@ -20,7 +20,7 @@ from forge.artifacts import create_artifact
 from forge.db import session_scope
 from forge.engine import llm, workspace
 from forge.engine.core import clip_json, emit
-from forge.engine.runtime import ArtifactSpec, NodeCancelled, NodeCtx, NodePaused, NodeResult
+from forge.engine.runtime import ArtifactSpec, NodeCancelled, NodeCtx, NodePaused, NodeResult, NodeSuspended
 from forge.models import Checkpoint, MemoryEntry, Run, ToolCall
 from forge.providers.base import Message
 from forge.registry.tools import TOOLS
@@ -242,6 +242,9 @@ def run_agent(ctx: NodeCtx) -> NodeResult:
         if paused:
             _save_steps(ctx, steps)
             raise NodePaused()
+        if ctx.should_yield():
+            _save_steps(ctx, steps)
+            raise NodeSuspended()
         if time.monotonic() > ctx.deadline:
             raise NodeError(ErrorClass.TIMEOUT, f"Node exceeded its {ctx.node.timeout_s}s timeout.")
         if len(steps) >= max_steps:
