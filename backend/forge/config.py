@@ -62,8 +62,7 @@ class Settings(BaseSettings):
             if not self.nebius_api_key:
                 # The app stays usable (sign-in, projects, workflows); executions fail with a clear
                 # "NEBIUS_API_KEY is not configured" error and System health shows the key as missing.
-                sys.stderr.write("WARNING: NEBIUS_API_KEY is not set; workflow execution is unavailable until it is.
-")
+                sys.stderr.write("WARNING: NEBIUS_API_KEY is not set; workflow execution is unavailable until it is.\n")
             if not self.public_url.startswith("https://"):
                 raise ValueError("FORGE_PUBLIC_URL must be https:// in production")
         return self
