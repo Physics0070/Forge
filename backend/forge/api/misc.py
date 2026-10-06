@@ -163,7 +163,15 @@ def dashboard(p: Principal = Depends(get_principal), db: Session = Depends(get_d
     viol = db.execute(text("SELECT count(*) FROM events WHERE workspace_id=:w AND type='POLICY_BLOCKED'"), {"w": ws}).scalar_one()
     pending = db.execute(text("SELECT count(*) FROM approvals WHERE workspace_id=:w AND status='PENDING'"), {"w": ws}).scalar_one()
     total_runs = sum(counts.values())
+    series = db.execute(text("""
+        SELECT d::date AS day,
+               (SELECT count(*) FROM runs r WHERE r.workspace_id=:w AND r.created_at::date = d::date) AS runs,
+               (SELECT count(*) FROM runs r WHERE r.workspace_id=:w AND r.status='SUCCESS' AND r.completed_at::date = d::date) AS ok,
+               (SELECT count(*) FROM runs r WHERE r.workspace_id=:w AND r.status='FAILED' AND r.completed_at::date = d::date) AS failed,
+               (SELECT COALESCE(sum(m.total_tokens),0) FROM model_calls m WHERE m.workspace_id=:w AND m.ts::date = d::date) AS tokens
+        FROM generate_series(now()::date - 13, now()::date, interval '1 day') d ORDER BY d"""), {"w": ws}).all()
     return {
+        "series": [{"day": str(r.day), "runs": int(r.runs), "success": int(r.ok), "failed": int(r.failed), "tokens": int(r.tokens)} for r in series],
         "empty": total_runs == 0,
         "activeRuns": active, "completedRuns": ok + bad, "totalRuns": total_runs,
         "successRate": round(ok / (ok + bad), 3) if (ok + bad) else None,
