@@ -2,6 +2,7 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from forge import ratelimit
 from forge.api.main import create_app
 from tests.conftest import auth_headers, signup
 
@@ -92,7 +93,9 @@ def test_project_crud(client):
     assert client.get("/api/projects").json()["projects"] == []
 
 
-def test_auth_rate_limit(client):
+def test_auth_rate_limit(client, monkeypatch):
+    # A huge window makes the bucket boundary fixed, so the test cannot straddle a window rollover.
+    monkeypatch.setitem(ratelimit.LIMITS, "auth", (10, 10**9))
     for _ in range(10):
         client.post("/api/auth/login", json={"email": "x@example.com", "password": "wrong-password-xx"})
     r = client.post("/api/auth/login", json={"email": "x@example.com", "password": "wrong-password-xx"})
