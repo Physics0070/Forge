@@ -139,3 +139,21 @@ def import_zip(data: bytes) -> Snapshot:
 
 def snapshot_key(workspace_id: uuid.UUID, project_id: uuid.UUID, repo_id: uuid.UUID) -> str:
     return f"repos/{workspace_id}/{project_id}/{repo_id}.tar.gz"
+
+
+def summarize_archive(archive: bytes) -> dict:
+    """Cheap, content-free overview (extension histogram + top-level entries) used as compiler context."""
+    import collections
+    import tarfile
+
+    exts: collections.Counter[str] = collections.Counter()
+    tops: collections.Counter[str] = collections.Counter()
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
+        for m in tar.getmembers():
+            if not m.isfile():
+                continue
+            parts = PurePosixPath(m.name.lstrip("./")).parts
+            if parts:
+                tops[parts[0]] += 1
+            exts[PurePosixPath(m.name).suffix.lower() or PurePosixPath(m.name).name] += 1
+    return {"extensions": dict(exts.most_common(12)), "top_level": dict(tops.most_common(12))}

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from forge.api import auth, projects
+from forge.api import auth, misc, projects, repositories, runs, workflows
 from forge.config import get_settings
 from forge.db import get_engine
 from forge.logging import log, setup_logging
@@ -74,6 +74,19 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(projects.router)
+    app.include_router(repositories.router)
+    app.include_router(workflows.router)
+    app.include_router(runs.router)
+    app.include_router(misc.router)
+
+    @app.on_event("startup")
+    def _startup() -> None:  # noqa: D401
+        try:
+            n = repositories.fail_stale_imports()
+            if n:
+                log("stale_imports_failed", logging.WARNING, count=n)
+        except Exception:
+            logging.getLogger("forge").exception("startup sweep failed")
     return app
 
 

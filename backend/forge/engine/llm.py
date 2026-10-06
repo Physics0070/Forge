@@ -116,3 +116,34 @@ def call_structured(ctx: NodeCtx, *, purpose: str, model: str, messages: list[Me
                        provider_request_id=res.request_id))
     return res
 
+
+
+def call_unscoped(provider: ModelProvider, *, workspace_id, purpose: str, model: str, messages: list[Message],
+                  schema: dict[str, Any], schema_name: str, max_tokens: int = 4000, temperature: float = 0.2,
+                  timeout_s: float = 120.0) -> GenerationResult:
+    """Model call outside any run (workflow compilation). Still persisted + metered; raises NodeError on failure."""
+    req = GenerationRequest(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, timeout_s=timeout_s)
+    req_hash = hashlib.sha256(json.dumps([[m.role, m.content] for m in messages], sort_keys=True).encode()).hexdigest()
+
+    def record(**kw: Any) -> None:
+        with session_scope() as db:
+            db.add(ModelCall(workspace_id=workspace_id, run_id=None, node_id=None, purpose=purpose, provider=provider.name,
+                             request_hash=req_hash, **kw))
+
+    try:
+        res = provider.structured_generate(req, schema, schema_name)
+    except ProviderError as exc:
+        partial: GenerationResult | None = getattr(exc, "result", None)
+        usage = partial.usage if partial else Usage(None, None)
+        cost = compute_cost(model, usage)
+        record(model=model, status="error", error_class=exc.kind, error_message=exc.message[:500], input_tokens=usage.input_tokens,
+               output_tokens=usage.output_tokens, total_tokens=usage.total_tokens, latency_ms=partial.latency_ms if partial else None,
+               cost_usd=cost.usd, cost_basis=cost.basis, provider_request_id=exc.request_id)
+        raise NodeError(classify_provider_error(exc), exc.message, detail={"provider_kind": exc.kind, "model": model}) from exc
+    estimated = res.usage.total_tokens is None
+    usage = res.usage if not estimated else Usage(provider.count_tokens(messages).count, max(1, len(res.text) // 3))
+    cost = compute_cost(res.model if res.model in load_pricing() else model, usage, tokens_estimated=estimated)
+    record(model=res.model or model, status="ok", input_tokens=usage.input_tokens, output_tokens=usage.output_tokens,
+           total_tokens=usage.total_tokens, latency_ms=res.latency_ms, cost_usd=cost.usd, cost_basis=cost.basis,
+           provider_request_id=res.request_id)
+    return res

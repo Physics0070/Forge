@@ -37,9 +37,11 @@ def execute(ctx: NodeCtx) -> NodeResult:
     t = ctx.node.type
     if t == NodeType.AGENT:
         res = agent_runner.run_agent(ctx)
+        res = _authoritative_diff(ctx, res)
         return _post_agent_verification(ctx, res)
     if t == NodeType.PARALLEL:
-        return NodeResult(output={"branches": [e.target for e in ctx.wf.outgoing(ctx.node.id)]})
+        # fan-out barrier: passes its input through unchanged and lists the branches it activates
+        return NodeResult(output={**ctx.input, "branches": [e.target for e in ctx.wf.outgoing(ctx.node.id)]})
     if t == NodeType.JOIN:
         return _join(ctx)
     if t == NodeType.CONDITION:
@@ -55,6 +57,22 @@ def execute(ctx: NodeCtx) -> NodeResult:
     if t == NodeType.RECOVERY:
         return _recovery(ctx)
     raise NodeError(ErrorClass.PERMANENT, f"Unsupported node type {t}")
+
+
+def _authoritative_diff(ctx: NodeCtx, res: NodeResult) -> NodeResult:
+    """An agent's claim about what it changed is never trusted: the diff is recomputed from the isolated workspace."""
+    if "RepositoryWrite" not in ctx.node.tools or ctx.repo_dir is None:
+        return res
+    from forge.tools.repo import current_diff
+
+    real = current_diff(ctx.repo_dir)
+    if "diff" in (ctx.node.output_schema.get("properties") or {}):
+        res.output = {**res.output, "diff": real}
+    res.artifacts = [a for a in res.artifacts if a.type != "patch"]
+    if real.strip():
+        res.artifacts.append(ArtifactSpec("patch", "UnifiedDiff", real, content_type="text/x-diff",
+                                          provenance_extra={"computed_by": "forge (git diff of isolated workspace)"}))
+    return res
 
 
 # --------------------------------------------------------------- simple nodes

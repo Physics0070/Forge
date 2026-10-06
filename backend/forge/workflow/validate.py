@@ -151,6 +151,11 @@ def validate_workflow(
 
     for e in wf.edges:
         comp[find(e.source)] = find(e.target)
+    for n in wf.nodes:  # a RECOVERY node is attached to the nodes it watches (not by edges)
+        if n.type == NodeType.RECOVERY:
+            for w in n.config.get("watches") or []:
+                if w in comp:
+                    comp[find(n.id)] = find(w)
     if len({find(i) for i in ids}) > 1:
         add("warning", "DISCONNECTED_GRAPH", "Workflow has disconnected parts that do not feed each other.")
     sinks = [i for i in ids if not wf.outgoing(i)]

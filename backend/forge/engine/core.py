@@ -216,6 +216,10 @@ def schedule(db: Session, run: Run) -> None:
                 else:
                     rn.input = inp
                     rn.attempt = max(rn.attempt, 1)
+                    sources = [e.source for e in wf.incoming(node.id) if e.kind == "data"]
+                    if sources:
+                        emit(db, run, "HANDOFF_VALIDATED", node_id=node.id, status="VALID", sources=sources,
+                             fields=sorted(inp.keys()))
                     transition(db, run, rn, N.READY)
                     if node.type == NodeType.RECOVERY:
                         _arm_recovery(db, run, wf, node, rns)
@@ -298,9 +302,9 @@ def create_run(db: Session, *, wv: WorkflowVersion, project_id: uuid.UUID, creat
         raise EngineError("NOT_APPROVED", "Workflow version must be approved before it can run.")
     ir = ir_override or wv.ir
     wf = Workflow.from_json(ir)
-    from forge.registry.agents import builtin_lookup
+    from forge.registry.custom import agent_lookup
 
-    issues = validate_workflow(wf, agent_lookup=builtin_lookup)
+    issues = validate_workflow(wf, agent_lookup=agent_lookup(db, wv.workspace_id))
     if has_errors(issues):
         raise EngineError("INVALID_WORKFLOW", "; ".join(i.message for i in issues if i.severity == "error")[:500])
     bp = wf.budget_policy

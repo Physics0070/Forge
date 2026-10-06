@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     nebius_max_concurrency: int = Field(4, alias="NEBIUS_MAX_CONCURRENCY")
 
     tavily_api_key: str = Field("", alias="TAVILY_API_KEY")
+    github_client_id: str = Field("", alias="GITHUB_CLIENT_ID")
+    github_client_secret: str = Field("", alias="GITHUB_CLIENT_SECRET")
 
     storage_endpoint: str = Field("", alias="STORAGE_ENDPOINT")
     storage_bucket: str = Field("forge-artifacts", alias="STORAGE_BUCKET")
