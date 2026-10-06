@@ -70,7 +70,7 @@ export default function RunPage() {
         <p className="text-xs text-faint"><Link href="/runs" className="hover:text-fg">Runs</Link> / <span className="mono">{shortId(run.id)}</span>
           {run.parentRunId && <> · replay of <Link className="mono text-info hover:underline" href={`/runs/${run.parentRunId}`}>{shortId(run.parentRunId)}</Link></>}</p>
         <div className="mt-0.5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             <h1 className="truncate text-[17px] font-semibold tracking-tight">{run.workflowName}</h1>
             {run.workflowId && <Link href={`/workflows/${run.workflowId}?v=${run.version}`} className="mono rounded border border-line-strong px-1.5 text-xs text-muted hover:text-fg">v{run.version}</Link>}
             <RunStatusBadge status={run.status} />
@@ -117,7 +117,7 @@ export default function RunPage() {
         {tab === "execution" && (
           <>
             <Panel flush className="overflow-hidden">
-              <div className="h-[420px] bg-bg">
+              <div className="h-[480px] bg-bg">
                 <FlowCanvas nodes={irNodes} edges={irEdges} mode="run" runNodes={byId} now={now} selectedNode={node} onSelectNode={(n) => n && setNode(n)} />
               </div>
             </Panel>

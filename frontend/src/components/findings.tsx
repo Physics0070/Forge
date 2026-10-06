@@ -66,7 +66,7 @@ export function FindingsTable({ rows }: { rows: VerificationRow[] }) {
                       </div>
                       <div className="space-y-3">
                         <div><p className="mb-1.5 text-xs font-medium text-muted">What the verifier checked</p>
-                          <ul className="space-y-1">{CHECKS.map(([k, l]) => <CheckRow key={k} label={l} v={typeof r.checks[k] === "boolean" ? r.checks[k] : undefined} />)}
+                          <ul className="space-y-1">{CHECKS.filter(([k]) => k in r.checks).map(([k, l]) => <CheckRow key={k} label={l} v={typeof r.checks[k] === "boolean" ? r.checks[k] : undefined} />)}
                             {r.checks.judge !== undefined && <CheckRow label={r.checks.judge === "unavailable" ? "Independent model opinion (unavailable)" : `Independent model ${r.checks.judge.supports ? "agrees" : "disagrees"} (${Number(r.checks.judge.confidence).toFixed(2)})`} v={r.checks.judge === "unavailable" ? undefined : r.checks.judge.supports} />}</ul></div>
                         {r.missingEvidence.length > 0 && <div><p className="mb-1 text-xs font-medium text-warn">Missing evidence</p><ul className="list-disc space-y-0.5 pl-4 text-xs text-muted">{r.missingEvidence.map((m, i) => <li key={i}>{m}</li>)}</ul></div>}
                         {r.recommendations.length > 0 && <div><p className="mb-1 text-xs font-medium text-muted">Recommendations</p><ul className="list-disc space-y-0.5 pl-4 text-xs text-muted">{r.recommendations.map((m, i) => <li key={i}>{m}</li>)}</ul></div>}

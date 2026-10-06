@@ -95,7 +95,7 @@ const tones: Record<Tone, string> = {
 };
 export function Badge({ tone = "neutral", children, className, title }: { tone?: Tone; children: React.ReactNode; className?: string; title?: string }) {
   return (
-    <span title={title} className={cn("inline-flex h-[18px] items-center gap-1 rounded-sm border px-1.5 text-2xs font-medium uppercase tracking-wide", tones[tone], className)}>
+    <span title={title} className={cn("inline-flex h-[18px] shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 text-2xs font-medium uppercase tracking-wide", tones[tone], className)}>
       {children}
     </span>
   );
@@ -110,7 +110,7 @@ export function Panel({ title, subtitle, actions, children, className, bodyClass
   title?: React.ReactNode; subtitle?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode; className?: string; bodyClassName?: string; flush?: boolean;
 }) {
   return (
-    <section className={cn("rounded-md border border-line bg-panel", className)}>
+    <section className={cn("min-w-0 rounded-md border border-line bg-panel", className)}>
       {(title || actions) && (
         <header className="flex min-h-[38px] items-center justify-between gap-3 border-b border-line px-3.5 py-2">
           <div className="min-w-0">

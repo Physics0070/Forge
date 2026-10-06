@@ -3,13 +3,16 @@ import Link from "next/link";
 import { GitCompare, RotateCcw } from "lucide-react";
 import { Money, RunStatusBadge } from "@/components/status";
 import { tableCls } from "@/components/ui/primitives";
-import { fmtDuration, fmtInt, fmtRelative, shortId } from "@/lib/format";
+import { durationBetween, fmtDuration, fmtInt, fmtRelative, shortId } from "@/lib/format";
+import { useNow } from "@/lib/hooks";
 import type { Run } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function RunsTable({ runs, compact, selectable, selected, onSelect }: {
   runs: Run[]; compact?: boolean; selectable?: boolean; selected?: string[]; onSelect?: (id: string) => void;
 }) {
+  const live = runs.some((r) => !r.completedAt && r.startedAt && !["CANCELLED", "FAILED", "SUCCESS"].includes(r.status));
+  const now = useNow(live);
   return (
     <div className="overflow-x-auto">
       <table className={tableCls.table}>
@@ -46,7 +49,7 @@ export function RunsTable({ runs, compact, selectable, selected, onSelect }: {
                 </span>
               </td>
               {!compact && <td className={cn(tableCls.td, "max-w-[280px] truncate text-muted")} title={r.input?.objective}>{r.input?.objective ?? r.goal}</td>}
-              <td className={cn(tableCls.td, "num text-right")}>{fmtDuration(r.durationS)}</td>
+              <td className={cn(tableCls.td, "num text-right")}>{fmtDuration(r.durationS ?? durationBetween(r.startedAt, r.completedAt, now))}</td>
               <td className={cn(tableCls.td, "num text-right")}>{r.totals.modelCalls ? fmtInt(r.totals.totalTokens) : <span className="text-faint">—</span>}</td>
               <td className={cn(tableCls.td, "text-right")}>{r.totals.modelCalls ? <Money value={r.totals.costUsd} basis={r.totals.costBasis} partial={r.totals.costPartial} /> : <span className="text-faint">—</span>}</td>
               <td className={cn(tableCls.td, "num text-right text-muted")}>{fmtRelative(r.createdAt)}</td>

@@ -120,18 +120,48 @@ function Inner(p: FlowProps) {
   const rf = useReactFlow();
   const sig = nodes.map((n) => n.id).sort().join("|") + "#" + edges.map((e) => e.source + ">" + e.target).sort().join("|");
   const base = React.useMemo(() => layout(nodes, edges), [sig]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [moved, setMoved] = React.useState<Record<string, { x: number; y: number }>>({});
-  React.useEffect(() => { setMoved({}); }, [sig]);
+  const wrap = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
-    const t = setTimeout(() => rf.fitView({ padding: 0.18, duration: 200, maxZoom: 1 }), 60);
+    // Fit the whole graph when it stays legible; otherwise open at a readable zoom anchored at the entry nodes.
+    const t = setTimeout(() => {
+      const el = wrap.current;
+      const ns = rf.getNodes();
+      if (!el || ns.length === 0) return;
+      const b = rf.getNodesBounds(ns);
+      const fit = Math.min((el.clientWidth - 48) / b.width, (el.clientHeight - 48) / b.height, 1);
+      if (fit >= 0.55) rf.fitView({ padding: 0.12, duration: 200, maxZoom: 1 });
+      else {
+        const z = 0.62;
+        rf.setViewport({ x: 24 - b.x * z, y: Math.max(16, (el.clientHeight - b.height * z) / 2) - b.y * z, zoom: z }, { duration: 200 });
+      }
+    }, 120);
     return () => clearTimeout(t);
   }, [sig, rf]);
 
-  const rfNodes: Node<CardData>[] = nodes.map((n) => ({
-    id: n.id, type: "forge", position: moved[n.id] ?? base[n.id] ?? { x: 0, y: 0 }, selected: p.selectedNode === n.id,
+  // React Flow needs the full node state (incl. measured size) round-tripped through applyNodeChanges,
+  // otherwise nodes stay invisible and edges never render. Data (states, issues) is merged in on every change;
+  // positions reset to the auto-layout only when the graph's structure changes.
+  // content signature: props like runNodes/issues are rebuilt by parents on every render, so identity is meaningless
+  const dataKey = JSON.stringify([
+    sig, mode, p.selectedNode, now, nodes,
+    nodes.map((n) => { const r = runNodes?.[n.id]; return r ? [r.state, r.attempt, r.model, r.startedAt, r.finishedAt] : null; }),
+    issues.map((i) => `${i.severity}:${i.code}:${i.node_id ?? ""}`),
+  ]);
+  const built: Node<CardData>[] = React.useMemo(() => nodes.map((n) => ({
+    id: n.id, type: "forge", position: base[n.id] ?? { x: 0, y: 0 }, selected: p.selectedNode === n.id,
     data: { node: n, mode, rn: runNodes?.[n.id], issues: issues.filter((i) => i.node_id === n.id), now },
     draggable: true, deletable: mode === "edit" && !n.locked,
-  }));
+  })), [dataKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [rfNodes, setRfNodes] = React.useState<Node<CardData>[]>(built);
+  const lastSig = React.useRef(sig);
+  React.useEffect(() => {
+    const structural = lastSig.current !== sig;
+    lastSig.current = sig;
+    setRfNodes((prev) => built.map((b) => {
+      const old = prev.find((x) => x.id === b.id);
+      return old && !structural ? { ...b, position: old.position, measured: old.measured } : old ? { ...b, measured: old.measured } : b;
+    }));
+  }, [built, sig]);
 
   const rfEdges: Edge[] = edges.filter((e) => nodes.some((n) => n.id === e.source) && nodes.some((n) => n.id === e.target)).map((e) => {
     let cls = "";
@@ -151,15 +181,11 @@ function Inner(p: FlowProps) {
   });
 
   const onNodesChange = React.useCallback((changes: NodeChange<Node<CardData>>[]) => {
-    const next = applyNodeChanges(changes, rfNodes);
-    setMoved((m) => {
-      const o = { ...m };
-      next.forEach((n) => { if (changes.some((c) => c.type === "position" && c.id === n.id)) o[n.id] = n.position; });
-      return o;
-    });
-  }, [rfNodes]);
+    setRfNodes((ns) => applyNodeChanges(changes, ns));
+  }, []);
 
   return (
+    <div ref={wrap} className="h-full w-full">
     <ReactFlow
       nodes={rfNodes}
       edges={rfEdges}
@@ -177,15 +203,15 @@ function Inner(p: FlowProps) {
       minZoom={0.25}
       maxZoom={1.6}
       proOptions={{ hideAttribution: true }}
-      fitView
     >
       <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="rgb(58,58,66)" />
       <Controls showInteractive={false} position="bottom-left" />
-      <MiniMap pannable zoomable position="bottom-right" nodeColor={(n) => {
+      <MiniMap pannable zoomable position="bottom-right" style={{ width: 150, height: 90 }} nodeColor={(n) => {
         const s = (n.data as CardData | undefined)?.rn?.state;
         return s === "SUCCESS" ? "rgb(62,207,142)" : s === "RUNNING" ? "rgb(255,106,43)" : s === "FAILED" ? "rgb(240,98,98)" : "rgb(58,58,66)";
       }} maskColor="rgba(0,0,0,0.5)" />
     </ReactFlow>
+    </div>
   );
 }
 

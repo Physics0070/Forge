@@ -82,7 +82,7 @@ export function Tip({ content, children, side = "top" }: { content: React.ReactN
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 export function Tabs<T extends string>({ tabs, value, onChange, className }: { tabs: { id: T; label: React.ReactNode; count?: number | null }[]; value: T; onChange: (v: T) => void; className?: string }) {
   return (
-    <div role="tablist" className={cn("flex items-center gap-0.5 border-b border-line", className)}>
+    <div role="tablist" className={cn("flex items-center gap-0.5 overflow-x-auto border-b border-line [scrollbar-width:none]", className)}>
       {tabs.map((t) => (
         <button
           key={t.id}
@@ -90,7 +90,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
           aria-selected={value === t.id}
           onClick={() => onChange(t.id)}
           className={cn(
-            "relative -mb-px h-8 px-3 text-sm transition-colors",
+            "relative -mb-px h-8 shrink-0 whitespace-nowrap px-3 text-sm transition-colors",
             value === t.id ? "text-fg" : "text-faint hover:text-muted",
           )}
         >

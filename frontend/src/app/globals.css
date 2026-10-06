@@ -99,6 +99,16 @@ body {
 /* React Flow theming */
 .react-flow {
   --xy-background-color: transparent;
+  --xy-controls-button-background-color: rgb(var(--panel));
+  --xy-controls-button-background-color-hover: rgb(var(--hover));
+  --xy-controls-button-color: rgb(var(--muted));
+  --xy-controls-button-color-hover: rgb(var(--fg));
+  --xy-controls-button-border-color: rgb(var(--line));
+  --xy-minimap-background-color: rgb(var(--panel));
+  --xy-minimap-mask-background-color: rgb(0 0 0 / 0.45);
+  --xy-edge-label-background-color: rgb(var(--panel));
+  --xy-edge-label-color: rgb(var(--muted));
+  --xy-node-boxshadow-selected: none;
 }
 .react-flow__attribution {
   display: none;

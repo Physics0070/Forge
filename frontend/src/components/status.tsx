@@ -103,7 +103,7 @@ export function Money({ value, basis, partial, className }: { value: number | nu
   if (value === null || value === undefined || basis === "UNAVAILABLE") {
     return (
       <Tip content="No price is configured for the models used, so FORGE cannot compute cost. It never guesses. Add prices in Settings → Models.">
-        <span className={cn("text-faint", className)}>{NA}</span>
+        <span className={cn("text-faint", className, "font-sans text-sm font-normal")}>{NA}</span>
       </Tip>
     );
   }
@@ -132,7 +132,11 @@ export function Metric({ label, value, sub, tone, hint }: { label: string; value
       <Tip content={hint}>
         <p className="truncate text-xs text-faint">{label}</p>
       </Tip>
-      <p className={cn("num mt-1 truncate text-[20px] font-semibold leading-6", colour)}>{value}</p>
+      {value === NA ? (
+        <p className="mt-1 text-sm leading-6 text-faint">{NA}</p>
+      ) : (
+        <p className={cn("num mt-1 truncate text-[20px] font-semibold leading-6", colour)}>{value}</p>
+      )}
       {sub && <p className="mt-0.5 truncate text-xs text-faint">{sub}</p>}
     </div>
   );

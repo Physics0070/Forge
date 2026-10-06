@@ -54,13 +54,13 @@ export function ApprovalCard({ approval, onDone }: { approval: Approval; onDone:
   }
   return (
     <section className="rounded-md border border-warn/50 bg-warn/[0.04]" aria-label="Approval required">
-      <header className="flex items-center gap-2.5 border-b border-warn/30 px-4 py-2.5">
-        <Hand className="h-4 w-4 text-warn" />
-        <div>
+      <header className="flex flex-wrap items-center gap-2.5 border-b border-warn/30 px-4 py-2.5">
+        <Hand className="h-4 w-4 shrink-0 text-warn" />
+        <div className="min-w-0 basis-[calc(100%-2rem)] sm:basis-0 sm:flex-1">
           <h3 className="text-sm font-semibold">{approval.request.title ?? "Approval required"}</h3>
           {approval.request.summary && <p className="text-xs text-muted">{approval.request.summary}</p>}
         </div>
-        <Badge tone="warn" className="ml-auto">execution paused here</Badge>
+        <Badge tone="warn" className="sm:ml-auto">execution paused here</Badge>
       </header>
       <div className="p-4"><Payload payload={approval.request.payload} /></div>
       <footer className="flex flex-wrap items-end gap-3 border-t border-warn/30 px-4 py-3">

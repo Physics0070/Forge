@@ -21,3 +21,4 @@ data_pg.*
 frontend/.next/
 frontend/next-env.d.ts
 *.tsbuildinfo
+backend/data/
