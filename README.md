@@ -101,6 +101,8 @@ Tests run against a real Postgres (separate `forge_test` database, real migratio
 
 ## Production
 
+**Live:** https://forge-app-ivory.vercel.app (Vercel + Supabase, serverless mode; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
+
 Single Nebius VM with Docker Compose + Caddy (automatic HTTPS), Nebius Managed PostgreSQL and Object Storage. Step by step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 | Component | Where it runs |

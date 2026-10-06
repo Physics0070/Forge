@@ -1,4 +1,23 @@
-# Deployment on Nebius AI Cloud
+# Deployment
+
+**Live demo:** https://forge-app-ivory.vercel.app (web) · API https://forge-api-teal.vercel.app
+
+## Option A (live): Vercel + Supabase, serverless
+
+| Component | Where |
+|---|---|
+| Web | Vercel project `forge-app` (root `frontend/`, Next.js); `FORGE_API_URL` → API; `/api/*` proxied so cookies stay first-party |
+| API | Vercel project `forge-api` (root `backend/`, FastAPI on Fluid compute, `index.py`, max 300 s) |
+| Workers | No always-on process: Supabase `pg_cron` calls `POST /api/internal/tick` every minute (shared secret); an open run page also calls `/api/runs/{id}/pump`. Each slice runs ≤150 s; agents checkpoint and suspend, then resume in the next slice |
+| Database | Supabase Postgres, private schema `forge`, dedicated role `forge_app`, via the transaction pooler (`FORGE_DB_POOLER=transaction`) |
+| Object storage | Postgres `blobs` table (`STORAGE_DRIVER=postgres`) |
+| Repo import / patches | HTTPS tarball download + pure-Python patching (no git binary) |
+| Test sandbox | Not available on Vercel (no Docker): tests report `NOT_AVAILABLE` |
+| Limits | ZIP uploads 4 MB (Vercel request limit), repo snapshots 40 MB |
+
+Pushing to `main` redeploys both projects automatically. Set `NEBIUS_API_KEY` (+ `NEBIUS_MODEL_NANO` / `NEBIUS_MODEL_ULTRA`) in the `forge-api` project's environment variables, then redeploy.
+
+## Option B: Nebius AI Cloud VM (Docker Compose)
 
 Target: one Nebius Compute VM running Docker Compose (Caddy + web + api + worker), with **Nebius Managed Service for PostgreSQL** and **Nebius Object Storage**. Inference: **Nebius Token Factory**. Scale out by adding worker VMs pointed at the same database and bucket.
 
