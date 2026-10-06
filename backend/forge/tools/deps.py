@@ -158,7 +158,7 @@ def osv_lookup(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
             r = client.post(OSV_BATCH, json=body)
             if r.status_code >= 400:
                 raise ToolError("osv_unavailable", f"OSV returned HTTP {r.status_code}.")
-            for p, res in zip(chunk, r.json().get("results", [])):
+            for p, res in zip(chunk, r.json().get("results", []), strict=False):
                 ids = [v["id"] for v in (res.get("vulns") or [])]
                 if ids:
                     results.append({"package": p["name"], "ecosystem": p["ecosystem"], "version": p["version"], "vuln_ids": ids})

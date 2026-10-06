@@ -234,10 +234,10 @@ def assemble(spec: dict[str, Any], goal: str, agents: dict[str, AgentDefinition]
             nodes.append({"id": jid, "type": "JOIN", "name": f"Merge inputs for {t['title']}",
                           "config": {"required": [d for _, _, d in srcs], "mode": "all", "concat": concat},
                           "outputSchema": {"type": "object", "properties": join_props, "required": list(join_props)}})
-            for gid, sa, d in srcs:
+            for gid, _sa, _d in srcs:
                 add_edge(gid, jid)
             add_edge(jid, head, [{"from": f"$.{k}", "to": k} for k in concat])
-            for gid, sa, d in srcs:  # non-array inputs flow straight from their producer
+            for gid, sa, _d in srcs:  # non-array inputs flow straight from their producer
                 rest = [m for m in _auto_mapping(sa, a) if m["to"] not in concat]
                 if rest:
                     add_edge(gid, head, rest)
@@ -289,7 +289,7 @@ def compile_goal(
     msgs = [Message("system", _system(agents)), Message("user", _user(goal, repo_summary, constraints))]
     attempts, tokens, last_issues, last_err = 0, 0, [], ""
     spec: dict[str, Any] | None = None
-    for attempt in range(2):  # initial + one repair round
+    for _ in range(2):  # initial + one repair round
         attempts += 1
         try:
             res = llm.call_unscoped(provider, workspace_id=workspace_id, purpose="compile", model=model, messages=msgs,

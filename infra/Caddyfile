@@ -1,0 +1,29 @@
+# Automatic HTTPS (Let's Encrypt) for FORGE_DOMAIN. One origin: the browser never needs CORS.
+{$FORGE_DOMAIN} {
+	encode zstd gzip {
+		match {
+			not path /api/runs/*/stream
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy same-origin
+		-Server
+	}
+
+	# Server-Sent Events: never buffer
+	@stream path /api/runs/*/stream
+	reverse_proxy @stream api:8000 {
+		flush_interval -1
+	}
+
+	reverse_proxy /api/* api:8000
+	reverse_proxy web:3000
+
+	request_body {
+		max_size 110MB
+	}
+}

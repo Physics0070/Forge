@@ -37,7 +37,7 @@ def sweep() -> dict[str, int]:
             rows = db.execute(text(f"""SELECT id, storage_key FROM artifacts WHERE workspace_id=:ws AND {finished.replace('run_id', 'artifacts.run_id')}
                                        OR (workspace_id=:ws AND expires_at IS NOT NULL AND expires_at < now()) LIMIT {BATCH}"""),
                               {"ws": ws, "d": art_d}).all()
-            for aid, key in rows:
+            for _aid, key in rows:
                 if key:
                     try:
                         store.delete(key)

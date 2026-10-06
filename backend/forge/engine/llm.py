@@ -17,7 +17,7 @@ from forge.providers.base import GenerationRequest, GenerationResult, Message, M
 from forge.providers.pricing import compute_cost, load_pricing
 from forge.workflow import budget as budget_mod
 from forge.workflow.ir import BudgetPolicy
-from forge.workflow.retry import ErrorClass, NodeError, classify_provider_error
+from forge.workflow.retry import NodeError, classify_provider_error
 
 DEFAULT_MAX_TOKENS = 3000
 

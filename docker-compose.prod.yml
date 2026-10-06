@@ -1,0 +1,77 @@
+# Production stack for a single Nebius AI Cloud Compute VM (see docs/DEPLOYMENT.md).
+# Database and object storage SHOULD be Nebius managed services (DATABASE_URL / STORAGE_* in .env).
+# Use `--profile selfhosted-db` only if you cannot use Managed Service for PostgreSQL.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      FORGE_DOMAIN: ${FORGE_DOMAIN:?set FORGE_DOMAIN in .env}
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    restart: "no"
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      FORGE_ENV: production
+      FORGE_WORKSPACES_ROOT: /srv/forge/workspaces
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    volumes:
+      # identical path inside and outside the container (the sandbox's sibling containers bind-mount it)
+      - /srv/forge:/srv/forge
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "forge.engine.worker"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      FORGE_ENV: production
+      FORGE_WORKSPACES_ROOT: /srv/forge/workspaces
+    group_add: ["${DOCKER_GID:-999}"]  # `getent group docker | cut -d: -f3` on the VM
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    volumes:
+      - /srv/forge:/srv/forge
+      # Test sandbox: the worker starts sibling containers with --network none --cap-drop ALL.
+      # Mounting the Docker socket gives the worker container control of Docker on this VM; keep the VM
+      # dedicated to FORGE, or set FORGE_SANDBOX_ENABLED=false (tests then report NOT_AVAILABLE).
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      replicas: 1
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      FORGE_API_URL: http://api:8000
+
+  postgres:
+    profiles: ["selfhosted-db"]
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: forge
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:

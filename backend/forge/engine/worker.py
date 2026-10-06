@@ -32,7 +32,7 @@ from forge.engine.core import emit, lock_run, run_nodes, transition, workflow_of
 from forge.engine.runtime import (LeaseLost, NodeBlocked, NodeCancelled, NodeCtx, NodeLoopback, NodePaused, NodeResult,
                                   NodeWaiting, get_provider)
 from forge.logging import log, redact
-from forge.models import Approval, Job, Run
+from forge.models import Approval, Job
 from forge.registry.agents import agent_from_json, builtin_lookup
 from forge.storage import get_store
 from forge.workflow import retry as retry_mod
@@ -230,7 +230,7 @@ class Worker:
 
     # ------------------------------------------------------------ process
     def process(self, job: dict[str, Any]) -> None:
-        jid, run_id, node_id = job["id"], job["run_id"], job["node_id"]
+        run_id, node_id = job["run_id"], job["node_id"]
         try:
             ctx = self._begin(job)
         except LeaseLost:
