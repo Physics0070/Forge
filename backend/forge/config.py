@@ -60,7 +60,10 @@ class Settings(BaseSettings):
             if len(self.session_secret) < 32:
                 raise ValueError("FORGE_SESSION_SECRET must be at least 32 characters in production")
             if not self.nebius_api_key:
-                raise ValueError("NEBIUS_API_KEY is required in production")
+                # The app stays usable (sign-in, projects, workflows); executions fail with a clear
+                # "NEBIUS_API_KEY is not configured" error and System health shows the key as missing.
+                sys.stderr.write("WARNING: NEBIUS_API_KEY is not set; workflow execution is unavailable until it is.
+")
             if not self.public_url.startswith("https://"):
                 raise ValueError("FORGE_PUBLIC_URL must be https:// in production")
         return self
